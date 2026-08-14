@@ -1,0 +1,23 @@
+# Python virtual environment
+venv/
+ENV/
+env/
+
+# Cache directories & compiled bytecode
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.cache/
+input_books/.cache/
+assets/.cache/
+
+# Local configuration (.env contains local paths/keys)
+.env
+
+# Generated output docx files
+output_docx/*.docx
+
+# IDE settings
+.vscode/
+.idea/
