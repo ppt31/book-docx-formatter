@@ -2,7 +2,10 @@ import os
 import io
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
-import fitz  # PyMuPDF
+try:
+    import pymupdf
+except ImportError:
+    import fitz as pymupdf
 import ebooklib
 from ebooklib import epub
 import docx
@@ -14,24 +17,24 @@ INPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 def create_sample_pdf():
     pdf_path = INPUT_DIR / "sample_english_burmese.pdf"
-    doc = fitz.open()
+    doc = pymupdf.open()
 
     # Page 0: Cover Page
     page_cover = doc.new_page(width=595, height=842)  # A4 size
-    rect = fitz.Rect(0, 0, 595, 842)
+    rect = pymupdf.Rect(0, 0, 595, 842)
     shape = page_cover.new_shape()
     shape.draw_rect(rect)
     shape.finish(fill=(0.1, 0.2, 0.4), color=None)
     shape.commit()
 
     page_cover.insert_text(
-        fitz.Point(60, 250), 
+        pymupdf.Point(60, 250), 
         "ENGLISH TO BURMESE\nTRANSLATION BOOK", 
         fontsize=28, 
         color=(1, 1, 1)
     )
     page_cover.insert_text(
-        fitz.Point(60, 350), 
+        pymupdf.Point(60, 350), 
         "Bilingual Edition / အင်္ဂလိပ် - မြန်မာ ဘာသာပြန် မာတိကာ", 
         fontsize=16, 
         color=(0.9, 0.9, 0.9)
@@ -51,7 +54,7 @@ Chapter 1: Daily Conversations (အခန်း ၁ - နေ့စဉ်ပြ�
 3. Thank you very much for reading this translation book.
    ဤဘာသာပြန်စာအုပ်ကို ဖတ်ရှုပေးသည့်အတွက် အထူးကျေးဇူးတင်ရှိပါသည်။
 """
-    page_body.insert_text(fitz.Point(50, 80), body_text, fontsize=13, color=(0, 0, 0))
+    page_body.insert_text(pymupdf.Point(50, 80), body_text, fontsize=13, color=(0, 0, 0))
 
     doc.save(str(pdf_path))
     doc.close()

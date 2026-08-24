@@ -4,9 +4,9 @@ import zipfile
 from pathlib import Path
 from PIL import Image
 try:
-    import fitz  # PyMuPDF
+    import pymupdf
 except ImportError:
-    import pymupdf as fitz
+    import fitz as pymupdf
 import ebooklib
 from ebooklib import epub
 import docx
@@ -22,12 +22,12 @@ def extract_cover_from_pdf(pdf_path: str, output_image_path: str = None) -> str:
         cache_dir.mkdir(parents=True, exist_ok=True)
         output_image_path = cache_dir / f"cover_{pdf_path.stem}.png"
 
-    doc = fitz.open(str(pdf_path))
+    doc = pymupdf.open(str(pdf_path))
     if len(doc) == 0:
         raise ValueError(f"PDF document '{pdf_path}' is empty.")
 
     page = doc[0]  # Page 0 is the front cover
-    mat = fitz.Matrix(2.0, 2.0)
+    mat = pymupdf.Matrix(2.0, 2.0)
     pix = page.get_pixmap(matrix=mat)
     
     pix.save(str(output_image_path))

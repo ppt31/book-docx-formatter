@@ -5,9 +5,9 @@ from bs4 import BeautifulSoup
 import ebooklib
 from ebooklib import epub
 try:
-    import fitz  # PyMuPDF
+    import pymupdf
 except ImportError:
-    import pymupdf as fitz
+    import fitz as pymupdf
 import docx
 
 
@@ -65,7 +65,7 @@ def parse_pdf_content(pdf_path: str) -> list[dict]:
     """
     Parses PDF pages (excluding page 0 cover) into text paragraphs.
     """
-    doc = fitz.open(str(pdf_path))
+    doc = pymupdf.open(str(pdf_path))
     content_elements = []
 
     # Skip page 0 (cover page)
