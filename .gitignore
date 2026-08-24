@@ -15,8 +15,9 @@ assets/.cache/
 # Local configuration (.env contains local paths/keys)
 .env
 
-# Generated output docx files
+# Generated output docx and pdf files
 output_docx/*.docx
+output_docx/*.pdf
 
 # IDE settings
 .vscode/
