@@ -4,7 +4,10 @@ from pathlib import Path
 from bs4 import BeautifulSoup
 import ebooklib
 from ebooklib import epub
-import fitz  # PyMuPDF
+try:
+    import fitz  # PyMuPDF
+except ImportError:
+    import pymupdf as fitz
 import docx
 
 
@@ -94,7 +97,13 @@ def parse_docx_content(docx_path: str) -> list[dict]:
             continue
         
         style_name = p.style.name.lower()
-        if "heading" in style_name or "title" in style_name:
+        if "heading 1" in style_name:
+            content_elements.append({"type": "heading", "level": 1, "text": text})
+        elif "heading 2" in style_name:
+            content_elements.append({"type": "heading", "level": 2, "text": text})
+        elif "heading 3" in style_name:
+            content_elements.append({"type": "heading", "level": 3, "text": text})
+        elif "heading" in style_name or "title" in style_name:
             content_elements.append({"type": "heading", "level": 2, "text": text})
         else:
             content_elements.append({"type": "paragraph", "text": text})
@@ -115,3 +124,39 @@ def parse_book_content(book_path: str) -> list[dict]:
         return parse_docx_content(book_path)
     else:
         raise ValueError(f"Unsupported file format '{ext}'")
+
+
+def elements_to_text(elements: list[dict]) -> str:
+    """
+    Converts structured content elements into editable markdown/text string.
+    """
+    lines = []
+    for el in elements:
+        el_type = el.get("type", "paragraph")
+        text = el.get("text", "").strip()
+        if not text:
+            continue
+        if el_type == "heading":
+            lvl = "#" * min(el.get("level", 2), 3)
+            lines.append(f"{lvl} {text}")
+        else:
+            lines.append(text)
+    return "\n\n".join(lines)
+
+
+def text_to_elements(text: str) -> list[dict]:
+    """
+    Converts edited text/markdown string back to structured content elements.
+    """
+    elements = []
+    blocks = [b.strip() for b in text.split("\n\n") if b.strip()]
+    for b in blocks:
+        if b.startswith("### "):
+            elements.append({"type": "heading", "level": 3, "text": b[4:].strip()})
+        elif b.startswith("## "):
+            elements.append({"type": "heading", "level": 2, "text": b[3:].strip()})
+        elif b.startswith("# "):
+            elements.append({"type": "heading", "level": 1, "text": b[2:].strip()})
+        else:
+            elements.append({"type": "paragraph", "text": b})
+    return elements

@@ -13,6 +13,7 @@ from src.config import Config
 from src.cover_extractor import extract_book_cover
 from src.book_parser import parse_book_content
 from src.docx_builder import build_docx_document
+from src.pdf_exporter import convert_docx_to_pdf
 
 
 def create_default_logo_if_missing(logo_path: Path):
@@ -33,10 +34,9 @@ def create_default_logo_if_missing(logo_path: Path):
     print(f"[*] Created default sample logo at: {logo_path}")
 
 
-def process_book_file(book_file_path: Path, logo_path: Path, output_dir: Path, cover_file_path: Path = None) -> Path:
+def process_book_file(book_file_path: Path, logo_path: Path, output_dir: Path, cover_file_path: Path = None, export_pdf: bool = True) -> Path:
     """
-    Orchestrates the conversion of a book file into a formatted DOCX document.
-    Can take an explicit cover image/file or extract cover automatically.
+    Orchestrates the conversion of a book file into a formatted DOCX document and optional PDF.
     """
     print(f"\n==========================================")
     print(f"[>] Processing book file: {book_file_path.name}")
@@ -76,17 +76,29 @@ def process_book_file(book_file_path: Path, logo_path: Path, output_dir: Path, c
         top_right_logo_height=Config.TOP_RIGHT_LOGO_HEIGHT_INCHES,
         transparency_percent=Config.WATERMARK_TRANSPARENCY_PERCENT
     )
+    print(f"      DOCX generated: {final_docx}")
 
-    print(f"[4/4] SUCCESS! Output file generated:\n      {final_docx}\n")
+    # 5. Export to PDF
+    if export_pdf:
+        print("[4/4] Exporting to PDF file (.pdf)...")
+        pdf_path = output_dir / f"{book_file_path.stem}.pdf"
+        try:
+            convert_docx_to_pdf(str(final_docx), str(pdf_path))
+            print(f"      PDF generated:  {pdf_path}")
+        except Exception as e:
+            print(f"      [!] PDF Export Warning: {e}")
+
+    print(f"[✓] SUCCESS! Processed: {book_file_path.name}\n")
     return Path(final_docx)
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Format EPUB, PDF or DOCX Books into Word (.docx) with Cover, Logo, Watermark & Page Numbers")
+    parser = argparse.ArgumentParser(description="Format EPUB, PDF or DOCX Books into Word (.docx) & PDF with Cover, Logo, Watermark & Page Numbers")
     parser.add_argument("--input", "-i", type=str, help="Input EPUB, PDF or DOCX file path or directory")
     parser.add_argument("--cover", "-c", type=str, help="Explicit Cover image or EPUB/PDF file for cover")
     parser.add_argument("--logo", "-l", type=str, help="Logo image path (defaults to assets/logo.png)")
     parser.add_argument("--output", "-o", type=str, help="Output directory (defaults to output_docx/)")
+    parser.add_argument("--pdf", action="store_true", default=True, help="Export PDF version as well (default: True)")
     
     args = parser.parse_args()
 
@@ -116,7 +128,7 @@ def main():
         if input_path == output_dir and book_file.suffix == ".docx":
             continue
         try:
-            process_book_file(book_file, logo_path, output_dir, cover_path)
+            process_book_file(book_file, logo_path, output_dir, cover_path, export_pdf=args.pdf)
         except Exception as e:
             print(f"[X] Error processing '{book_file.name}': {e}")
             import traceback

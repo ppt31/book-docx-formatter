@@ -5,3 +5,4 @@ beautifulsoup4>=4.12.0
 Pillow>=10.0.0
 python-dotenv>=1.0.0
 streamlit>=1.30.0
+pywin32>=306

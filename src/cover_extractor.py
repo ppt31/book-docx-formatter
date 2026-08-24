@@ -3,7 +3,10 @@ import io
 import zipfile
 from pathlib import Path
 from PIL import Image
-import fitz  # PyMuPDF
+try:
+    import fitz  # PyMuPDF
+except ImportError:
+    import pymupdf as fitz
 import ebooklib
 from ebooklib import epub
 import docx
