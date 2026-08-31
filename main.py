@@ -12,7 +12,7 @@ if str(BASE_DIR) not in sys.path:
 from src.config import Config
 from src.cover_extractor import extract_book_cover
 from src.book_parser import parse_book_content
-from src.docx_builder import build_docx_document
+from src.docx_builder import build_docx_document, format_existing_docx
 from src.pdf_exporter import convert_docx_to_pdf
 
 
@@ -37,6 +37,7 @@ def create_default_logo_if_missing(logo_path: Path):
 def process_book_file(book_file_path: Path, logo_path: Path, output_dir: Path, cover_file_path: Path = None, export_pdf: bool = True) -> Path:
     """
     Orchestrates the conversion of a book file into a formatted DOCX document and optional PDF.
+    Preserves all existing embedded photos, images, and tables if input is a .docx file!
     """
     print(f"\n==========================================")
     print(f"[>] Processing book file: {book_file_path.name}")
@@ -56,31 +57,43 @@ def process_book_file(book_file_path: Path, logo_path: Path, output_dir: Path, c
     
     print(f"      Cover image path: {cover_path}")
 
-    # 2. Parse text content
-    print("[2/4] Parsing text content & chapters...")
-    content_elements = parse_book_content(str(book_file_path))
-    print(f"      Extracted {len(content_elements)} content elements.")
-
-    # 3. Output file path (using exact book stem name)
+    # 2. Output file path (using exact book stem name)
     output_docx_name = f"{book_file_path.stem}.docx"
     output_docx_path = output_dir / output_docx_name
 
-    # 4. Generate formatted DOCX
-    print("[3/4] Building Word (.docx) file with Cover, 2\" Logo, 93% Watermark & Page Numbers...")
-    final_docx = build_docx_document(
-        cover_image_path=cover_path,
-        content_elements=content_elements,
-        logo_path=str(logo_path),
-        output_docx_path=str(output_docx_path),
-        top_right_logo_width=Config.TOP_RIGHT_LOGO_WIDTH_INCHES,
-        top_right_logo_height=Config.TOP_RIGHT_LOGO_HEIGHT_INCHES,
-        transparency_percent=Config.WATERMARK_TRANSPARENCY_PERCENT
-    )
+    # 3. Generate formatted DOCX
+    is_docx = book_file_path.suffix.lower() == ".docx"
+    if is_docx:
+        print("[2/4] Formatting existing DOCX (Preserving 100% of embedded photos, tables & layout)...")
+        final_docx = format_existing_docx(
+            input_docx_path=str(book_file_path),
+            cover_image_path=cover_path,
+            logo_path=str(logo_path),
+            output_docx_path=str(output_docx_path),
+            top_right_logo_width=Config.TOP_RIGHT_LOGO_WIDTH_INCHES,
+            top_right_logo_height=Config.TOP_RIGHT_LOGO_HEIGHT_INCHES,
+            transparency_percent=Config.WATERMARK_TRANSPARENCY_PERCENT
+        )
+    else:
+        print("[2/4] Parsing text content & chapters from EPUB/PDF...")
+        content_elements = parse_book_content(str(book_file_path))
+        print(f"      Extracted {len(content_elements)} content elements.")
+        print("[3/4] Building Word (.docx) file with Cover, 2\" Logo, 93% Watermark & Page Numbers...")
+        final_docx = build_docx_document(
+            cover_image_path=cover_path,
+            content_elements=content_elements,
+            logo_path=str(logo_path),
+            output_docx_path=str(output_docx_path),
+            top_right_logo_width=Config.TOP_RIGHT_LOGO_WIDTH_INCHES,
+            top_right_logo_height=Config.TOP_RIGHT_LOGO_HEIGHT_INCHES,
+            transparency_percent=Config.WATERMARK_TRANSPARENCY_PERCENT
+        )
+    
     print(f"      DOCX generated: {final_docx}")
 
-    # 5. Export to PDF
+    # 4. Export to PDF
     if export_pdf:
-        print("[4/4] Exporting to PDF file (.pdf)...")
+        print("[4/4] Exporting to PDF file (.pdf) with all photos & watermarks intact...")
         pdf_path = output_dir / f"{book_file_path.stem}.pdf"
         try:
             convert_docx_to_pdf(str(final_docx), str(pdf_path))

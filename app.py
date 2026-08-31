@@ -13,7 +13,7 @@ if str(BASE_DIR) not in sys.path:
 from src.config import Config
 from src.cover_extractor import extract_book_cover
 from src.book_parser import parse_book_content, elements_to_text, text_to_elements
-from src.docx_builder import build_docx_document
+from src.docx_builder import build_docx_document, format_existing_docx
 from src.pdf_exporter import convert_docx_to_pdf
 from main import create_default_logo_if_missing
 
@@ -27,9 +27,9 @@ def main():
 
     st.title("📚 Book Formatter & PDF Exporter")
     st.markdown("""
-    Upload your **Book Cover** and **Translated Book (.docx)**, **edit content directly on this webpage**, 
-    and export formatted **Word (.docx)** and **PDF** documents with **2"x2" top-right logo**, 
-    **93% transparent center watermark**, and **page numbers**.
+    Upload your **Book Cover** and **Book File (.docx / .pdf / .epub)**.
+    Format your book with **Letter size (8.5" x 11")**, **2"x2" top-right logo**, **93% transparent center watermark**, 
+    and **bottom-center page numbers**, while **preserving all embedded photos, images, and tables**!
     """)
 
     Config.ensure_directories()
@@ -54,12 +54,6 @@ def main():
         help="93% transparency means 7% subtle opacity centered behind page text."
     )
 
-    page_format = st.sidebar.selectbox(
-        "Page Size", 
-        ["Letter (8.5\" x 11.0\")", "A4 (8.27\" x 11.69\")"], 
-        index=0
-    )
-
     st.sidebar.markdown("---")
     st.sidebar.info("""
     **Layout Specifications:**
@@ -67,22 +61,23 @@ def main():
     - 2"x2" Top-Right Logo (0.5" from top/right, behind text)
     - 93% Center Watermark (behind text)
     - Dynamic Page Numbers (bottom-center)
+    - Embedded Photos & Tables: 100% Preserved
     """)
 
     # --- UPLOAD SECTION ---
     col1, col2 = st.columns(2)
 
     with col1:
-        st.subheader("1. Upload Cover Image (or PDF/EPUB)")
+        st.subheader("1. Upload Book Cover Image (or PDF/EPUB)")
         uploaded_cover = st.file_uploader(
             "Select Cover Image or PDF/EPUB to screenshot cover", 
             type=["jpg", "jpeg", "png", "pdf", "epub"]
         )
 
     with col2:
-        st.subheader("2. Upload Translated Book Content (.docx)")
+        st.subheader("2. Upload Book Content Document (.docx)")
         uploaded_docx = st.file_uploader(
-            "Select Translated Book Document (.docx / .epub / .pdf)", 
+            "Select Book Document (.docx / .epub / .pdf)", 
             type=["docx", "epub", "pdf"]
         )
 
@@ -100,15 +95,15 @@ def main():
         else:
             st.image(str(Config.LOGO_PATH), caption="Current Logo (assets/logo.png)", width=140)
 
-    # --- IN-BROWSER DOCX CONTENT EDITOR & WORKFLOW ---
+    # --- PROCESSING WORKFLOW ---
     main_book_file = uploaded_docx if uploaded_docx is not None else uploaded_cover
 
     if main_book_file is not None:
-        # Load or cache parsed text in session_state
+        file_ext = Path(main_book_file.name).suffix.lower()
         file_key = f"book_content_{main_book_file.name}"
         
-        # Save temp copy of book file to parse
-        with tempfile.NamedTemporaryFile(delete=False, suffix=Path(main_book_file.name).suffix) as tmp_book:
+        # Save temp copy of uploaded book file
+        with tempfile.NamedTemporaryFile(delete=False, suffix=file_ext) as tmp_book:
             tmp_book.write(main_book_file.getbuffer())
             tmp_book_path = tmp_book.name
 
@@ -127,7 +122,7 @@ def main():
         else:
             cover_path = extract_book_cover(tmp_book_path)
 
-        # Parse text if not already loaded in session state for this file
+        # Parse text for optional text editor
         if file_key not in st.session_state:
             initial_elements = parse_book_content(tmp_book_path)
             st.session_state[file_key] = elements_to_text(initial_elements)
@@ -140,8 +135,8 @@ def main():
         else:
             current_logo_path = str(Config.LOGO_PATH)
 
-        # Layout: Cover on Left, In-browser Editor on Right
-        st.subheader("3. Edit Book Content & Preview Cover")
+        # Layout: Cover on Left, Options & In-browser Editor on Right
+        st.subheader("3. Book Preview & Content Editor")
         c_left, c_right = st.columns([1, 2])
 
         with c_left:
@@ -152,21 +147,30 @@ def main():
                 st.info("No cover preview available")
 
         with c_right:
-            st.markdown("#### ✏️ In-Browser DOCX Content Editor")
-            st.caption("Edit chapters, English & Burmese text below. Use `# Chapter 1`, `## Heading 2`, or regular paragraphs.")
-            
-            edited_text = st.text_area(
-                "Book Text Content",
-                value=st.session_state[file_key],
-                height=450,
-                help="You can modify or translate any sentence here before exporting."
-            )
-            # Update session state with edits
-            st.session_state[file_key] = edited_text
+            if file_ext == ".docx":
+                st.success("✅ **Original DOCX Detected**: Direct Formatting Mode is active — all embedded photos, diagrams, tables, and layouts inside your document will be **100% preserved**.")
+                
+                edit_mode = st.radio(
+                    "Formatting Mode:",
+                    [
+                        "Preserve Full Original DOCX (Keeps all embedded photos, tables & layout)",
+                        "Rebuild from In-Browser Text Editor"
+                    ],
+                    index=0
+                )
+            else:
+                edit_mode = "Rebuild from In-Browser Text Editor"
 
-            col_btn1, col_btn2 = st.columns([1, 1])
-            with col_btn1:
-                if st.button("🔄 Reset to Original Uploaded Content"):
+            with st.expander("✏️ View / Edit Text Content in Browser", expanded=(edit_mode == "Rebuild from In-Browser Text Editor")):
+                st.caption("You can modify text, sentences, or chapter titles below.")
+                edited_text = st.text_area(
+                    "Book Text Content",
+                    value=st.session_state[file_key],
+                    height=350
+                )
+                st.session_state[file_key] = edited_text
+
+                if st.button("🔄 Reset to Original Text"):
                     initial_elements = parse_book_content(tmp_book_path)
                     st.session_state[file_key] = elements_to_text(initial_elements)
                     st.rerun()
@@ -183,26 +187,38 @@ def main():
         with col_export1:
             st.markdown("#### 📝 Export Word Document (.docx)")
             if st.button("🚀 Build & Download Word Document (.docx)", type="primary", use_container_width=True):
-                with st.spinner("Generating formatted Microsoft Word document..."):
-                    # Convert edited text back to elements
-                    content_elements = text_to_elements(st.session_state[file_key])
+                with st.spinner("Formatting Word document (preserving all photos & layout)..."):
                     output_path = Config.OUTPUT_FOLDER / output_filename
 
-                    build_docx_document(
-                        cover_image_path=cover_path,
-                        content_elements=content_elements,
-                        logo_path=current_logo_path,
-                        output_docx_path=str(output_path),
-                        top_right_logo_width=top_right_logo_size,
-                        top_right_logo_height=top_right_logo_size,
-                        transparency_percent=watermark_transparency
-                    )
+                    if file_ext == ".docx" and edit_mode.startswith("Preserve Full Original"):
+                        # Direct formatting: 100% preserves all embedded photos & tables
+                        format_existing_docx(
+                            input_docx_path=tmp_book_path,
+                            cover_image_path=cover_path,
+                            logo_path=current_logo_path,
+                            output_docx_path=str(output_path),
+                            top_right_logo_width=top_right_logo_size,
+                            top_right_logo_height=top_right_logo_size,
+                            transparency_percent=watermark_transparency
+                        )
+                    else:
+                        # Rebuild from content elements
+                        content_elements = text_to_elements(st.session_state[file_key])
+                        build_docx_document(
+                            cover_image_path=cover_path,
+                            content_elements=content_elements,
+                            logo_path=current_logo_path,
+                            output_docx_path=str(output_path),
+                            top_right_logo_width=top_right_logo_size,
+                            top_right_logo_height=top_right_logo_size,
+                            transparency_percent=watermark_transparency
+                        )
 
                     with open(output_path, "rb") as f:
                         docx_bytes = f.read()
 
                     st.session_state[f"docx_ready_{file_key}"] = docx_bytes
-                    st.success(f"Generated `{output_filename}` successfully!")
+                    st.success(f"Generated `{output_filename}` with all photos preserved!")
 
             if f"docx_ready_{file_key}" in st.session_state:
                 st.download_button(
@@ -216,22 +232,32 @@ def main():
         with col_export2:
             st.markdown("#### 📄 Export PDF Document (.pdf)")
             if st.button("📑 Build & Export PDF Document (.pdf)", type="secondary", use_container_width=True):
-                with st.spinner("Generating formatted document and exporting to PDF..."):
-                    # 1. Build DOCX
-                    content_elements = text_to_elements(st.session_state[file_key])
+                with st.spinner("Generating document and exporting to PDF (with all photos & watermark)..."):
                     output_path = Config.OUTPUT_FOLDER / output_filename
 
-                    build_docx_document(
-                        cover_image_path=cover_path,
-                        content_elements=content_elements,
-                        logo_path=current_logo_path,
-                        output_docx_path=str(output_path),
-                        top_right_logo_width=top_right_logo_size,
-                        top_right_logo_height=top_right_logo_size,
-                        transparency_percent=watermark_transparency
-                    )
+                    if file_ext == ".docx" and edit_mode.startswith("Preserve Full Original"):
+                        format_existing_docx(
+                            input_docx_path=tmp_book_path,
+                            cover_image_path=cover_path,
+                            logo_path=current_logo_path,
+                            output_docx_path=str(output_path),
+                            top_right_logo_width=top_right_logo_size,
+                            top_right_logo_height=top_right_logo_size,
+                            transparency_percent=watermark_transparency
+                        )
+                    else:
+                        content_elements = text_to_elements(st.session_state[file_key])
+                        build_docx_document(
+                            cover_image_path=cover_path,
+                            content_elements=content_elements,
+                            logo_path=current_logo_path,
+                            output_docx_path=str(output_path),
+                            top_right_logo_width=top_right_logo_size,
+                            top_right_logo_height=top_right_logo_size,
+                            transparency_percent=watermark_transparency
+                        )
 
-                    # 2. Export to PDF via Word COM
+                    # Export to PDF via Word COM / docx2pdf
                     pdf_path = Config.OUTPUT_FOLDER / pdf_filename
                     convert_docx_to_pdf(str(output_path), str(pdf_path))
 
@@ -239,7 +265,7 @@ def main():
                         pdf_bytes = f.read()
 
                     st.session_state[f"pdf_ready_{file_key}"] = pdf_bytes
-                    st.success(f"Exported `{pdf_filename}` successfully!")
+                    st.success(f"Exported `{pdf_filename}` with all photos & watermarks intact!")
 
             if f"pdf_ready_{file_key}" in st.session_state:
                 st.download_button(
